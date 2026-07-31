@@ -6664,6 +6664,35 @@ def _parse_etime(etime: str) -> int | None:
     elif len(parts) == 4: return parts[0]*86400 + parts[1]*3600 + parts[2]*60 + parts[3]
     return None
 
+# ── Host-integration opt-outs ────────────────────────────────────────────────
+# amux integrates with its host in ways that write outside ~/.amux/ — global
+# agent config, git hooks in project repos, a /usr/local stub, and process
+# reapers that are not scoped to processes amux created. Each is reasonable on a
+# dedicated box amux alone controls, and several are wrong on a workstation the
+# user already relies on.
+#
+# Every such integration is gated through this one predicate so the set is
+# discoverable in one place. Defaults are unchanged: absent any AMUX_* variable,
+# every integration stays on and behaviour matches previous releases.
+#
+#   AMUX_HOST_INTEGRATION=off   turn every host integration off at once
+#   AMUX_<SPECIFIC>=on|off      override one, wins over the master switch
+_AMUX_OFF_VALUES = ("off", "0", "false", "no")
+
+
+def _integration_disabled(flag: str) -> bool:
+    """True when the named host integration should be skipped.
+
+    An explicit per-flag value always wins, so a user can disable everything and
+    re-enable one thing. Otherwise the AMUX_HOST_INTEGRATION master switch
+    decides. Unset everywhere means enabled, preserving upstream behaviour.
+    """
+    specific = os.environ.get(flag)
+    if specific is not None:
+        return specific.strip().lower() in _AMUX_OFF_VALUES
+    return os.environ.get("AMUX_HOST_INTEGRATION", "on").strip().lower() in _AMUX_OFF_VALUES
+
+
 def _reap_stale_browsers():
     """Kill browser-use Chrome/Playwright processes that are idle or exceed max TTL.
 
@@ -13506,7 +13535,7 @@ def _ensure_memory(name: str, work_dir: str):
     Memory is keyed by session name (not project dir). Global memory from
     _global.md is composed above a marker so each session sees both.
     """
-    if os.environ.get("AMUX_CLAUDE_MEMORY", "own").strip().lower() in ("off", "0", "false", "no"):
+    if _integration_disabled("AMUX_CLAUDE_MEMORY"):
         return  # leave Claude's own project memory index alone
 
     mem_file = CC_MEMORY / f"{name}.md"
@@ -14220,7 +14249,7 @@ def _install_amux_commit_hook(work_dir: str) -> None:
     treat an injected trailer as a correctness bug rather than a feature, and
     the cross-session guards only matter when several sessions share ONE
     checkout — a setup that per-session git worktrees make impossible."""
-    if os.environ.get("AMUX_GIT_HOOKS", "on").strip().lower() in ("off", "0", "false", "no"):
+    if _integration_disabled("AMUX_GIT_HOOKS"):
         return
     # The staged-state guard rides along with every stamp-hook install site,
     # so both hooks reach every session repo through the same three paths
