@@ -59863,7 +59863,24 @@ def _ensure_tls(lan_ip: str) -> tuple:
 # ── Main ──
 
 def _kill_stale_port(port: int):
-    """Kill any stale process holding our port so we can bind cleanly on restart."""
+    """Kill any stale process holding our port so we can bind cleanly on restart.
+
+    Set AMUX_KILL_STALE_PORT=off to refuse instead: amux reports what holds the
+    port and lets the bind fail, rather than SIGKILLing a process it cannot
+    confirm is its own.
+    """
+    if _integration_disabled("AMUX_KILL_STALE_PORT"):
+        try:
+            r = subprocess.run(["lsof", "-ti", f":{port}"], capture_output=True,
+                               text=True, timeout=5)
+            holders = [x for x in r.stdout.split() if x.strip() and int(x) != os.getpid()]
+            if holders:
+                slog(f"[startup] port {port} is held by pid(s) {', '.join(holders)} — "
+                     f"not killing (AMUX_KILL_STALE_PORT=off). Stop it yourself, or "
+                     f"start amux on another port.")
+        except Exception:
+            pass
+        return
     try:
         r = subprocess.run(["lsof", "-ti", f":{port}"], capture_output=True, text=True, timeout=5)
         if r.returncode == 0:
