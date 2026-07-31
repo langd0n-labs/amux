@@ -6696,11 +6696,16 @@ def _integration_disabled(flag: str) -> bool:
 def _reap_stale_browsers():
     """Kill browser-use Chrome/Playwright processes that are idle or exceed max TTL.
 
+    Set AMUX_REAPERS=off to disable. The hard-TTL phase matches on a command-line
+    pattern, not on ownership, so it will kill a browser amux never started.
+
     Two checks:
     1. Idle check — if no API call has touched a session in _BROWSER_IDLE_SECONDS, close it.
     2. Hard TTL — any browser-use Chrome process older than _BROWSER_MAX_TTL_SECONDS is killed
        regardless of activity (safety net for leaked processes).
     """
+    if _integration_disabled("AMUX_REAPERS"):
+        return
     now = time.time()
 
     # ── Phase 1: close idle browser-use sessions via CLI ──
@@ -6751,6 +6756,8 @@ def _kill_stale_ray():
     """Kill Ray Serve if it's been running for more than 30 minutes.
     Sessions occasionally start Ray for local testing but never stop it,
     consuming massive CPU/RAM (multiple ML model workers)."""
+    if _integration_disabled("AMUX_REAPERS"):
+        return
     global _last_ray_check
     now = time.time()
     if now - _last_ray_check < 600:
