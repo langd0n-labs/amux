@@ -14210,7 +14210,15 @@ def _install_amux_prepush_guard(work_dir: str) -> None:
 def _install_amux_commit_hook(work_dir: str) -> None:
     """Install a non-destructive prepare-commit-msg hook that stamps commits
     with $AMUX_SESSION. Idempotent; never clobbers a foreign hook (chains onto
-    it instead). Best-effort — failures are swallowed."""
+    it instead). Best-effort — failures are swallowed.
+
+    Set AMUX_GIT_HOOKS=off to skip hook installation entirely. Repos with their
+    own commit-message convention (trailers, attribution, sign-off policy) can
+    treat an injected trailer as a correctness bug rather than a feature, and
+    the cross-session guards only matter when several sessions share ONE
+    checkout — a setup that per-session git worktrees make impossible."""
+    if os.environ.get("AMUX_GIT_HOOKS", "on").strip().lower() in ("off", "0", "false", "no"):
+        return
     # The staged-state guard rides along with every stamp-hook install site,
     # so both hooks reach every session repo through the same three paths
     # (start_session, _install_hooks_all_sessions, the git peek action).
