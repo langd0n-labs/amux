@@ -8055,6 +8055,8 @@ for s in json.load(sys.stdin): print(s['name'], '(running)' if s.get('running') 
 esac
 """
     stub_path = _pathlib.Path("/usr/local/bin/amux")
+    if _integration_disabled("AMUX_GLOBAL_CLI"):
+        return
     try:
         if not stub_path.exists() or stub_path.read_text() != _amux_stub:
             stub_path.write_text(_amux_stub)
