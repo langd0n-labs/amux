@@ -13506,6 +13506,9 @@ def _ensure_memory(name: str, work_dir: str):
     Memory is keyed by session name (not project dir). Global memory from
     _global.md is composed above a marker so each session sees both.
     """
+    if os.environ.get("AMUX_CLAUDE_MEMORY", "own").strip().lower() in ("off", "0", "false", "no"):
+        return  # leave Claude's own project memory index alone
+
     mem_file = CC_MEMORY / f"{name}.md"
 
     _capture_claude_memory_changes(name, work_dir)
