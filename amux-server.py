@@ -14660,14 +14660,19 @@ def start_session(name: str, extra_flags: str = "", _skip_conv_id: bool = False)
             if provider not in ("codex", "gemini") and _has_oauth:
                 shell_rc += "unset ANTHROPIC_API_KEY; "
             # Forward select env vars into the tmux session.
+            # AMUX_SESSION / AMUX_URL are NOT gated here — the heartbeat hooks and
+            # the dashboard do not function without them. Only provider
+            # credentials are, since a session may be meant to use a different
+            # account than the server, or none at all.
             _env_args = []
+            _inject_creds = not _integration_disabled("AMUX_INJECT_CREDS")
             if _has_oauth:
                 _env_args += ["-e", "ANTHROPIC_API_KEY="]
-            else:
+            elif _inject_creds:
                 _api_key_val = os.environ.get("ANTHROPIC_API_KEY", "")
                 if _api_key_val:
                     _env_args += ["-e", f"ANTHROPIC_API_KEY={_api_key_val}"]
-            for _ekey in [
+            for _ekey in ([] if not _inject_creds else [
                 "ANTHROPIC_API_BASE",
                 "OPENAI_API_KEY",
                 "GEMINI_API_KEY",
@@ -14675,7 +14680,7 @@ def start_session(name: str, extra_flags: str = "", _skip_conv_id: bool = False)
                 "GOOGLE_GENAI_USE_VERTEXAI",
                 "GOOGLE_CLOUD_PROJECT",
                 "GOOGLE_CLOUD_LOCATION",
-            ]:
+            ]):
                 _eVal = os.environ.get(_ekey, "")
                 if _eVal:
                     _env_args += ["-e", f"{_ekey}={_eVal}"]
@@ -59580,9 +59585,9 @@ def _watch_server_env():
             if not new_vals:
                 continue
             slog(f"[env-reload] server.env changed, updated: {', '.join(new_vals.keys())}")
-            if "ANTHROPIC_API_KEY" in new_vals:
+            if "ANTHROPIC_API_KEY" in new_vals and not _integration_disabled("AMUX_INJECT_CREDS"):
                 _init_claude_config()
-                # Push key into all running tmux sessions
+                # Push key into running amux-managed tmux sessions
                 _new_key = new_vals["ANTHROPIC_API_KEY"]
                 try:
                     r = subprocess.run(
@@ -59590,6 +59595,11 @@ def _watch_server_env():
                         capture_output=True, text=True)
                     if r.returncode == 0:
                         for sn in r.stdout.strip().splitlines():
+                            # Only amux-managed sessions. Broadcasting a
+                            # credential to every tmux session on the box
+                            # reaches shells that have nothing to do with amux.
+                            if not sn.startswith("amux-"):
+                                continue
                             subprocess.run(
                                 ["tmux", "set-environment", "-t", sn,
                                  "ANTHROPIC_API_KEY", _new_key],
