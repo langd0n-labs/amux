@@ -36,7 +36,13 @@ for _cv in ("CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT"):
 _env_home = os.environ.get("AMUX_HOME") or os.environ.get("CC_HOME")
 _amux_home = Path(_env_home).expanduser() if _env_home else Path.home() / ".amux"
 # Migrate legacy default dirs only when using the default location.
-if not _env_home:
+# Inline env check rather than _integration_disabled(): this runs at import time,
+# before that helper is defined.
+_migrate_off = os.environ.get(
+    "AMUX_LEGACY_MIGRATE",
+    os.environ.get("AMUX_HOST_INTEGRATION", "on"),
+).strip().lower() in ("off", "0", "false", "no")
+if not _env_home and not _migrate_off:
     for _old_home in [Path.home() / ".cmux", Path.home() / ".cc"]:
         if not _amux_home.exists() and _old_home.exists():
             _old_home.rename(_amux_home)
