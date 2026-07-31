@@ -7485,6 +7485,8 @@ def _sql_readonly_conn() -> sqlite3.Connection:
 
 
 def _init_claude_config():
+    if _integration_disabled("AMUX_CLAUDE_CONFIG"):
+        return
     """Pre-configure ~/.claude.json to skip the interactive setup wizard.
 
     When ANTHROPIC_API_KEY is available in the environment, this writes the
@@ -7585,6 +7587,8 @@ def _ensure_no_native_artifacts():
     _init_claude_config early-returns for Plan users. `deny` is honored even under
     yolo / --dangerously-skip-permissions; the global CLAUDE.md rule adds the
     positive guidance (what to write instead)."""
+    if _integration_disabled("AMUX_CLAUDE_CONFIG"):
+        return
     import json as _json, pathlib as _pathlib
     sf = _pathlib.Path.home() / ".claude" / "settings.json"
     try:
